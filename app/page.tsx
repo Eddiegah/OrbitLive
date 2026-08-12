@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PLANETS, heliocentricPosition } from "../lib/orbitalMechanics";
 import { TIME_SPEEDS } from "../lib/types";
 
@@ -18,14 +18,27 @@ function formatDate(d: Date): string {
 }
 
 export default function Home() {
-  const dateRef = useRef(new Date());
+  // dateRef starts at a fixed, deterministic epoch rather than `new Date()`
+  // -- this is a statically-exported page, so the initial render happens
+  // once at build time and again at hydration; anything computed from a
+  // live clock during render (not inside an effect) would produce two
+  // different values and trigger a React hydration mismatch. The real
+  // current time gets set client-side in the effect below, after mount.
+  const dateRef = useRef(new Date(0));
   const speedRef = useRef(0);
-  const [displayDate, setDisplayDate] = useState(new Date());
+  const [displayDate, setDisplayDate] = useState<Date | null>(null);
   const [speedIndex, setSpeedIndex] = useState(0);
   const [focusedName, setFocusedName] = useState<string | null>(null);
 
+  useEffect(() => {
+    const now = new Date();
+    dateRef.current = now;
+    setDisplayDate(now);
+  }, []);
+
   const distances = useMemo(() => {
     const map = new Map<string, number>();
+    if (!displayDate) return map;
     for (const p of PLANETS) map.set(p.name, heliocentricPosition(p, displayDate).distanceAU);
     return map;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -55,7 +68,7 @@ export default function Home() {
             <p>The solar system, computed right now — every planet&apos;s position comes from real orbital mechanics, not an animation loop.</p>
           </div>
           <div className="date-card glass">
-            <div className="date">{formatDate(displayDate)}</div>
+            <div className="date">{displayDate ? formatDate(displayDate) : "Loading…"}</div>
             <div className="label">simulated date{speedIndex === 0 ? " · live" : ""}</div>
           </div>
         </div>
